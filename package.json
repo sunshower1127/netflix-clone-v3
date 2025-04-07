@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"bunx --bun vite\" \"./image-server --delay 200\"",
+    "dev": "concurrently \"bunx --bun vite\" \"image-server/image-server --delay 200\"",
     "build": "bunx --bun vite build"
   },
   "dependencies": {
