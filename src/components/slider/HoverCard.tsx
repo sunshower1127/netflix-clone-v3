@@ -42,23 +42,38 @@ export default function HoverCard({
   }, [buttonWidth, rect.left, rect.right, rect.top, rect.width]);
 
   const handleRef = useRefCallback(({ element, defer }) => {
-    const handleMouseMove = throttle((e: MouseEvent) => {
+    let mouseX = 0;
+    let mouseY = 0;
+
+    const closeIfOutOfBounds = () => {
       const hoverCardRect = element.getBoundingClientRect();
-      if (hoverCardRect.x === 0 && hoverCardRect.y === 0) {
-        return;
-      }
-      if (
-        inRange(e.clientX, hoverCardRect.left, hoverCardRect.right) &&
-        inRange(e.clientY, hoverCardRect.top, hoverCardRect.bottom)
-      )
-        return;
+      if (mouseX === 0 && mouseY === 0) return;
+      if (hoverCardRect.x === 0 && hoverCardRect.y === 0) return;
+
+      if (inRange(mouseX, hoverCardRect.left, hoverCardRect.right)) return;
+      if (inRange(mouseY, hoverCardRect.top, hoverCardRect.bottom)) return;
 
       close();
+    };
+
+    const handleMouseMove = throttle((e: MouseEvent) => {
+      if (e.clientX === 0 && e.clientY === 0) return;
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+
+      closeIfOutOfBounds();
     }, 50); // 20fps
+
+    const handleScroll = throttle(() => {
+      closeIfOutOfBounds();
+    }, 50); // 20fps
+
     window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("scroll", handleScroll);
 
     defer(() => {
       window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("scroll", handleScroll);
     });
   }, []);
 

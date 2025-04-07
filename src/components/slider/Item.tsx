@@ -1,4 +1,5 @@
 import { getCssVar } from "@/lib/sw-toolkit/utils/style.ts";
+import { once } from "es-toolkit";
 import { AnimatePresence } from "motion/react";
 import { useCallback, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -59,7 +60,8 @@ export default function Item({
               url={source}
               buttonWidth={getButtonWidth()}
               rect={getRect()}
-              close={() => setHover(false)}
+              close={once(() => setHover(false))}
+              onMouseLeave={() => setHover(false)}
             />
           )}
         </AnimatePresence>,
