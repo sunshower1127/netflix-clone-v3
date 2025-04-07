@@ -4,8 +4,6 @@ import { AnimatePresence, motion, MotionStyle } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { twMerge } from "tailwind-merge";
 
-import useSafeEffect from "@/lib/sw-toolkit/hooks/useSafeEffect.ts";
-import { isNil } from "@/lib/sw-toolkit/utils/utils.ts";
 import { Icon } from "@iconify/react/dist/iconify.js";
 import { delay, range } from "es-toolkit";
 import { isEmpty } from "es-toolkit/compat";
@@ -20,40 +18,10 @@ export default function Slider({
   const itemLength = sources.length;
   const [index, setIndex] = useState(0);
   const [itemCapacity, setItemCapacity] = useState(2);
-  const ulRef = useRef<HTMLUListElement>(null);
   const [firstTouch, setFirstTouch] = useState(false);
-  const scrollButtonVisible = itemLength > itemCapacity;
+  const isScrollNeeded = itemLength > itemCapacity;
   const [isScrolling, setIsScrolling] = useState(false);
-  console.log("index", index);
-
-  useEffect(() => {
-    if (ulRef.current) {
-      ulRef.current!.children[itemCapacity + 1].scrollIntoView({
-        inline: "start",
-        behavior: "instant",
-      });
-    }
-  }, [index, itemCapacity]);
-
-  useSafeEffect(
-    ({ defer }) => {
-      const handleChangeSize = () => {
-        if (ulRef.current) {
-          ulRef.current.children[itemCapacity + 1].scrollIntoView({
-            inline: "start",
-          });
-        }
-      };
-
-      window.addEventListener("resize", handleChangeSize);
-      // ulRef.current?.addEventListener("scrollend", handleChangeSize);
-      defer(() => {
-        window.removeEventListener("resize", handleChangeSize);
-        // ulRef.current?.removeEventListener("scrollend", handleChangeSize);
-      });
-    },
-    [itemCapacity],
-  );
+  const [scrollX, setScrollX] = useState(0);
 
   const handleBreakpoint = useRefCallback(({ defer, element }) => {
     const breakPoints = [640, 768, 1024, 1280];
@@ -75,46 +43,33 @@ export default function Slider({
   }, []); // PASSED
 
   const handlePageScroll = async (opt: "left" | "right") => {
-    if (isNil(ulRef.current)) return;
-
-    const items = ulRef.current.children;
-
-    const scroll = (index: number, behavior: "smooth" | "instant") => {
-      items[index].scrollIntoView({
-        behavior: behavior,
-        inline: "start",
-      });
-    };
-
     let newIndex: number;
+
+    setIsScrolling(true);
 
     if (opt === "left") {
       if (index === 0) {
         newIndex = itemLength - itemCapacity;
-        scroll(1, "smooth");
+        setScrollX(-itemCapacity);
       } else {
         newIndex = Math.max(0, index - itemCapacity);
-        scroll(itemCapacity - (index - newIndex) + 1, "smooth");
+        setScrollX(newIndex - index);
       }
     } else {
       if (index === itemLength - itemCapacity) {
         newIndex = 0;
-        scroll(itemCapacity * 2 + 1, "smooth");
+        setScrollX(itemCapacity);
       } else {
         newIndex = Math.min(itemLength - itemCapacity, index + itemCapacity);
-        scroll(itemCapacity + (newIndex - index) + 1, "smooth");
+        setScrollX(newIndex - index);
       }
     }
 
-    if (newIndex === index) return;
-
-    setIsScrolling(true);
-
-    await delay(1000);
+    await delay(700);
     setFirstTouch(true);
     setIndex(newIndex);
-    await delay(100);
     setIsScrolling(false);
+    setScrollX(0);
   };
 
   return (
@@ -127,17 +82,19 @@ export default function Slider({
       ref={handleBreakpoint}
     >
       <header className="flex w-full flex-row justify-between px-[calc(var(--button-width)+4px)]">
-        <h6 className="text-xs font-light">{headerText}</h6>
+        <h6 className="text-xs font-light sm:text-sm md:text-base lg:text-lg xl:text-xl">
+          {headerText}
+        </h6>
         <PageIndicator
           maxPage={Math.ceil(itemLength / itemCapacity)}
           curPage={Math.ceil(index / itemCapacity)}
         />
       </header>
-      <nav className="group/nav relative py-1">
+      <nav className="group/nav relative overflow-x-hidden py-1">
         <button
           className={twMerge(
-            "group/btn absolute top-0 left-0 h-full w-(--button-width) rounded-r-xs bg-black/50 hover:bg-black/70",
-            !scrollButtonVisible || !firstTouch ? "hidden" : "",
+            "group/btn absolute top-0 left-0 z-10 h-full w-(--button-width) cursor-pointer rounded-r-xs bg-black/50 hover:bg-black/70",
+            !isScrollNeeded || !firstTouch ? "hidden" : "",
           )}
           disabled={isScrolling}
           onClick={() => handlePageScroll("left")}
@@ -149,16 +106,22 @@ export default function Slider({
         </button>
 
         <ul
-          className="flex scroll-pl-[calc(var(--button-width)+4px)] flex-row gap-1 overflow-x-hidden"
-          ref={ulRef}
+          className={twMerge(
+            "flex flex-row gap-1",
+            classes.scroll,
+            isScrolling ? "transition-transform duration-700" : "",
+          )}
+          style={{
+            transform: `translateX(var(--scroll-${scrollX}))`,
+            transitionTimingFunction: "cubic-bezier(.45,.91,.55,.97)",
+          }}
         >
-          <div className="w-(--button-width)" />
-          {range(itemCapacity).map((i) => {
+          {range(itemCapacity + 1).map((i) => {
             const indexBefore =
-              (index + i - itemCapacity + itemLength) % itemLength;
+              (index - (itemCapacity - i + 1) + 2 * itemLength) % itemLength;
             return (
               <Item
-                className={!firstTouch ? "hidden" : ""}
+                className={!firstTouch ? "invisible" : ""}
                 key={indexBefore}
                 source={sources[indexBefore]}
               />
@@ -167,16 +130,15 @@ export default function Slider({
           {range(itemCapacity).map((i) => (
             <Item key={i} source={sources[index + i]} />
           ))}
-          {range(itemCapacity).map((i) => {
+          {range(itemCapacity + 1).map((i) => {
             const indexAfter = (index + i + itemCapacity) % itemLength;
             return <Item key={indexAfter} source={sources[indexAfter]} />;
           })}
-          <div className="w-(--button-width)" />
         </ul>
         <button
           className={twMerge(
-            "group/btn absolute top-0 right-0 h-full w-(--button-width) rounded-l-xs bg-black/50 hover:bg-black/70",
-            !scrollButtonVisible ? "hidden" : "",
+            "group/btn absolute top-0 right-0 z-10 h-full w-(--button-width) cursor-pointer rounded-l-xs bg-black/50 hover:bg-black/70",
+            !isScrollNeeded ? "hidden" : "",
           )}
           disabled={isScrolling}
           onClick={() => handlePageScroll("right")}
@@ -222,7 +184,7 @@ function Item({ source, className }: { source: string; className?: string }) {
   );
 
   return (
-    <li className={twMerge("w-(--item-width)", className)}>
+    <li className={twMerge("w-(--item-width) cursor-pointer", className)}>
       <div className="w-full bg-red-400" />
       <img
         ref={rectRef}
@@ -296,7 +258,12 @@ function Card({
       {...props}
     >
       <img className="aspect-video w-full rounded-xs" src={url} />
-      <div className="flex w-full flex-col items-center gap-2 p-3 text-[0.7rem] font-light">
+      <motion.div
+        className="flex w-full flex-col items-center gap-2 p-3 text-[0.7rem] font-light"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      >
         <div className="flex w-full flex-row justify-between">
           <div className="flex flex-row items-center gap-1">
             <Icon
@@ -319,7 +286,7 @@ function Card({
         </div>
         <p className="w-full">에피소드 25개</p>
         <p className="w-full">진심어린 로맨틱 첫사랑</p>
-      </div>
+      </motion.div>
     </motion.div>
   );
 }
